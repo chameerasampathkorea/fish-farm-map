@@ -112,7 +112,6 @@ function selectTank(id){const t=tanks.find(t=>t.id===id);if(!t)return;selected=i
 function reset(){
   selected=null;select.value='';
   tanks.forEach(t=>{t.element.classList.remove('selected');t.element.setAttribute('aria-pressed','false');});
-  svg.style.transform='none';
   view={...initial};update();
   document.getElementById('selection').innerHTML='<span class="selection-icon">⌖</span><h3>Take a closer look</h3><p>Click a tank on the map or choose its number above.</p>';
   document.getElementById('stock-form').hidden=true;
@@ -258,114 +257,100 @@ document.querySelectorAll('[data-block]').forEach(button=>button.onclick=()=>{
 });
 
 // =========================================================================
-// ULTRA-SMOOTH MOBILE PINCH-ZOOM & PAN (HARDWARE ACCELERATED)
+// ULTRA-SMOOTH MOBILE DIRECT PINCH-ZOOM & PAN (NO FREEZE / NO STUCK)
 // =========================================================================
 document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('gesturechange',e=>e.preventDefault());
 document.addEventListener('gestureend',e=>e.preventDefault());
-
-let dragged=false;
-let isPinching=false;
-let startPinchDist=0;
-let initialScale=1;
-let currentScale=1;
-let panX=0,panY=0;
-let startPanX=0,startPanY=0;
-let pinchCenterX=0,pinchCenterY=0;
-
-function applyTransform(){
-  svg.style.transform=`translate3d(${panX}px, ${panY}px, 0) scale(${currentScale})`;
-}
-
-function commitTransformToViewBox(){
-  if(currentScale===1&&panX===0&&panY===0)return;
-  const rect=viewport.getBoundingClientRect();
-  const f=1/currentScale;
-  const originX=view.x+(pinchCenterX/rect.width)*view.w;
-  const originY=view.y+(pinchCenterY/rect.height)*view.h;
-
-  const newW=Math.max(180,Math.min(initial.w*1.5,view.w*f));
-  const newH=newW*initial.h/initial.w;
-
-  view.x=originX-(pinchCenterX/rect.width)*newW-(panX/rect.width)*newW;
-  view.y=originY-(pinchCenterY/rect.height)*newH-(panY/rect.height)*newH;
-  view.w=newW;
-  view.h=newH;
-
-  svg.style.transform='none';
-  currentScale=1;
-  panX=0;
-  panY=0;
-  update();
-}
 
 viewport.addEventListener('wheel',e=>{
   e.preventDefault();
   zoom(Math.exp(Math.max(-200,Math.min(200,e.deltaY))*.0015),atClient(e.clientX,e.clientY));
 },{passive:false});
 
-viewport.addEventListener('touchstart',e=>{
+let dragged=false;
+let prevDist=-1;
+let prevCenter=null;
+
+viewport.addEventListener('touchstart',(e)=>{
   if(e.target.closest('button')||e.target.closest('select'))return;
-
-  if(e.touches.length===1){
-    dragged=false;
-    isPinching=false;
-    startPanX=e.touches[0].clientX-panX;
-    startPanY=e.touches[0].clientY-panY;
-  }else if(e.touches.length===2){
+  if(e.touches.length===2){
     e.preventDefault();
-    isPinching=true;
-    dragged=true;
-
     const t1=e.touches[0],t2=e.touches[1];
-    startPinchDist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
-    initialScale=currentScale;
-
-    const rect=viewport.getBoundingClientRect();
-    pinchCenterX=((t1.clientX+t2.clientX)/2)-rect.left;
-    pinchCenterY=((t1.clientY+t2.clientY)/2)-rect.top;
+    prevDist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
+    prevCenter={x:(t1.clientX+t2.clientX)/2,y:(t1.clientY+t2.clientY)/2};
+  }else if(e.touches.length===1){
+    dragged=false;
+    prevDist=-1;
+    prevCenter={x:e.touches[0].clientX,y:e.touches[0].clientY};
   }
 },{passive:false});
 
-viewport.addEventListener('touchmove',e=>{
+viewport.addEventListener('touchmove',(e)=>{
+  if(!prevCenter)return;
   e.preventDefault();
 
-  if(e.touches.length===1&&!isPinching){
+  const rect=viewport.getBoundingClientRect();
+
+  if(e.touches.length===2&&prevDist>0){
     dragged=true;
-    const rect=svg.getBoundingClientRect();
-    const dx=(e.touches[0].clientX-startPanX)*(view.w/rect.width);
-    const dy=(e.touches[0].clientY-startPanY)*(view.h/rect.height);
-
-    view.x-=dx*0.18;
-    view.y-=dy*0.18;
-    startPanX=e.touches[0].clientX;
-    startPanY=e.touches[0].clientY;
-    update();
-  }else if(e.touches.length===2&&isPinching){
     const t1=e.touches[0],t2=e.touches[1];
-    const currentDist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
+    const newDist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
 
-    if(startPinchDist>5){
-      const zoomFactor=currentDist/startPinchDist;
-      currentScale=Math.min(Math.max(initialScale*zoomFactor,0.6),4.0);
-      requestAnimationFrame(applyTransform);
+    if(newDist>10){
+      const currentCenter={x:(t1.clientX+t2.clientX)/2,y:(t1.clientY+t2.clientY)/2};
+      const zoomFactor=prevDist/newDist;
+
+      const cx=view.x+((currentCenter.x-rect.left)/rect.width)*view.w;
+      const cy=view.y+((currentCenter.y-rect.top)/rect.height)*view.h;
+
+      const targetW=Math.max(180,Math.min(initial.w*1.5,view.w*zoomFactor));
+      const f=targetW/view.w;
+
+      view.x=cx-(cx-view.x)*f;
+      view.y=cy-(cy-view.y)*f;
+      view.w=targetW;
+
+      const dx=(currentCenter.x-prevCenter.x)*(view.w/rect.width);
+      const dy=(currentCenter.y-prevCenter.y)*(view.h/rect.height);
+      view.x-=dx;
+      view.y-=dy;
+
+      update();
+      prevDist=newDist;
+      prevCenter=currentCenter;
     }
+  }else if(e.touches.length===1){
+    const t=e.touches[0];
+    const distMoved=Math.hypot(t.clientX-prevCenter.x,t.clientY-prevCenter.y);
+    if(distMoved>2)dragged=true;
+
+    const dx=(t.clientX-prevCenter.x)*(view.w/rect.width);
+    const dy=(t.clientY-prevCenter.y)*(view.h/rect.height);
+
+    view.x-=dx;
+    view.y-=dy;
+    update();
+
+    prevCenter={x:t.clientX,y:t.clientY};
   }
 },{passive:false});
 
-function handleTouchEnd(e){
-  if(e.touches.length<2&&isPinching){
-    isPinching=false;
-    commitTransformToViewBox();
-  }
-  if(e.touches.length===0){
-    dragged=false;
-    isPinching=false;
+function endTouchHandler(e){
+  if(e.touches.length===2){
+    const t1=e.touches[0],t2=e.touches[1];
+    prevDist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
+    prevCenter={x:(t1.clientX+t2.clientX)/2,y:(t1.clientY+t2.clientY)/2};
+  }else if(e.touches.length===1){
+    prevDist=-1;
+    prevCenter={x:e.touches[0].clientX,y:e.touches[0].clientY};
+  }else{
+    prevDist=-1;
+    prevCenter=null;
   }
 }
-
-viewport.addEventListener('touchend',handleTouchEnd,{passive:true});
-viewport.addEventListener('touchcancel',handleTouchEnd,{passive:true});
+viewport.addEventListener('touchend',endTouchHandler,{passive:true});
+viewport.addEventListener('touchcancel',endTouchHandler,{passive:true});
 
 function mode(aerial){
   viewport.classList.toggle('aerial',aerial);
