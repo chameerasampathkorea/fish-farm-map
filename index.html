@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <!-- පිටුව zoom වීම මුළුමනින්ම නවත්වයි -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Korea Fish Farm | Aerial Tank Map</title>
   <meta name="description" content="An interactive aerial reconstruction of a Korean fish farm, with blue-water tanks and the original printed tank numbers.">
   <link rel="stylesheet" href="style.css">
@@ -40,9 +41,11 @@
     <button data-block="2">Block 2</button>
     <button data-block="1">Block 1</button>
   </div>
-  <div id="viewport" tabindex="0" style="touch-action: pan-x pan-y pinch-zoom; will-change: transform; transform: translateZ(0);" aria-label="Tank map. Use plus and minus to zoom, arrow keys to pan, and zero to fit.">
+
+  <!-- touch-action: none මඟින් mobile browser හි default scroll/zoom නවතා map එකට පාලනය දෙයි -->
+  <div id="viewport" tabindex="0" style="touch-action: none; overflow: hidden; position: relative;" aria-label="Tank map. Use plus and minus to zoom, arrow keys to pan, and zero to fit.">
     <div class="compass" aria-hidden="true">↑<small>PLAN UP</small></div>
-    <svg id="farm" viewBox="0 0 1500 660" xmlns="http://www.w3.org/2000/svg" aria-label="32 numbered blue water tanks" style="will-change: transform;">
+    <svg id="farm" viewBox="0 0 1500 660" xmlns="http://www.w3.org/2000/svg" aria-label="32 numbered blue water tanks" style="transform-origin: 0 0; will-change: transform;">
       <defs>
         <linearGradient id="water" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#56c2e7"/><stop offset=".44" stop-color="#228bbd"/><stop offset="1" stop-color="#0e557b"/></linearGradient>
         <linearGradient id="dry" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b9b3a0"/><stop offset=".45" stop-color="#d3ccba"/><stop offset="1" stop-color="#a39d8c"/></linearGradient>
@@ -65,7 +68,7 @@
       <span></span>
       <button id="fit" aria-label="Fit entire farm">⌖</button>
     </div>
-    <div class="map-hint">Drag to explore <b>·</b> Scroll or pinch to zoom</div>
+    <div class="map-hint">Drag to explore <b>·</b> Pinch to zoom</div>
     <button class="motion" id="motion" aria-pressed="true" aria-label="Pause water animation">Ⅱ</button>
   </div>
   <div class="map-footer">
