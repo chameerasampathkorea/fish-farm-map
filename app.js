@@ -76,7 +76,6 @@ tanks.forEach((tank,index)=>{
 const select=document.getElementById('tank-select');
 for(const tank of [...tanks].sort((a,b)=>Number(a.id)-Number(b.id))){const o=document.createElement('option');o.value=tank.id;o.textContent=tank.id;select.append(o);}
 
-// Optimerad uppdateringsfunktion med begärd animationsram (RAF)
 let renderPending=false;
 function update(){
   view.w=Math.max(180,Math.min(initial.w*1.5,view.w));
@@ -110,7 +109,14 @@ function selectionDetails(){
 }
 
 function selectTank(id){const t=tanks.find(t=>t.id===id);if(!t)return;selected=id;select.value=id;tanks.forEach(t=>{t.element.classList.toggle('selected',t.id===id);t.element.setAttribute('aria-pressed',String(t.id===id));});focusBounds(t.bounds);selectionDetails();}
-function reset(){selected=null;select.value='';tanks.forEach(t=>{t.element.classList.remove('selected');t.element.setAttribute('aria-pressed','false');});view={...initial};update();document.getElementById('selection').innerHTML='<span class="selection-icon">⌖</span><h3>Take a closer look</h3><p>Click a tank on the map or choose its number above.</p>';document.getElementById('stock-form').hidden=true;}
+function reset(){
+  selected=null;select.value='';
+  tanks.forEach(t=>{t.element.classList.remove('selected');t.element.setAttribute('aria-pressed','false');});
+  svg.style.transform='none';
+  view={...initial};update();
+  document.getElementById('selection').innerHTML='<span class="selection-icon">⌖</span><h3>Take a closer look</h3><p>Click a tank on the map or choose its number above.</p>';
+  document.getElementById('stock-form').hidden=true;
+}
 
 function renderStock(){
   const largest=Math.max(0,...Object.values(stock));const unit=Math.max(1,Math.ceil(largest/120));
@@ -252,75 +258,114 @@ document.querySelectorAll('[data-block]').forEach(button=>button.onclick=()=>{
 });
 
 // =========================================================================
-// HÖGPRESTANDA TOUCH & POINTER-HANTERING (INGEN LAG, MJUK PINCH-ZOOM)
+// ULTRA-SMOOTH MOBILE PINCH-ZOOM & PAN (HARDWARE ACCELERATED)
 // =========================================================================
+document.addEventListener('gesturestart',e=>e.preventDefault());
+document.addEventListener('gesturechange',e=>e.preventDefault());
+document.addEventListener('gestureend',e=>e.preventDefault());
+
 let dragged=false;
-const activePointers=new Map();
-let initialPinchDist=0;
-let initialViewW=0;
-let pinchCenterPoint={x:0,y:0};
+let isPinching=false;
+let startPinchDist=0;
+let initialScale=1;
+let currentScale=1;
+let panX=0,panY=0;
+let startPanX=0,startPanY=0;
+let pinchCenterX=0,pinchCenterY=0;
+
+function applyTransform(){
+  svg.style.transform=`translate3d(${panX}px, ${panY}px, 0) scale(${currentScale})`;
+}
+
+function commitTransformToViewBox(){
+  if(currentScale===1&&panX===0&&panY===0)return;
+  const rect=viewport.getBoundingClientRect();
+  const f=1/currentScale;
+  const originX=view.x+(pinchCenterX/rect.width)*view.w;
+  const originY=view.y+(pinchCenterY/rect.height)*view.h;
+
+  const newW=Math.max(180,Math.min(initial.w*1.5,view.w*f));
+  const newH=newW*initial.h/initial.w;
+
+  view.x=originX-(pinchCenterX/rect.width)*newW-(panX/rect.width)*newW;
+  view.y=originY-(pinchCenterY/rect.height)*newH-(panY/rect.height)*newH;
+  view.w=newW;
+  view.h=newH;
+
+  svg.style.transform='none';
+  currentScale=1;
+  panX=0;
+  panY=0;
+  update();
+}
 
 viewport.addEventListener('wheel',e=>{
   e.preventDefault();
   zoom(Math.exp(Math.max(-200,Math.min(200,e.deltaY))*.0015),atClient(e.clientX,e.clientY));
 },{passive:false});
 
-viewport.addEventListener('pointerdown',e=>{
+viewport.addEventListener('touchstart',e=>{
   if(e.target.closest('button')||e.target.closest('select'))return;
-  dragged=false;
-  viewport.setPointerCapture(e.pointerId);
-  activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
 
-  if(activePointers.size===2){
-    const pts=[...activePointers.values()];
-    initialPinchDist=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
-    initialViewW=view.w;
-    pinchCenterPoint=atClient((pts[0].x+pts[1].x)/2,(pts[0].y+pts[1].y)/2);
+  if(e.touches.length===1){
+    dragged=false;
+    isPinching=false;
+    startPanX=e.touches[0].clientX-panX;
+    startPanY=e.touches[0].clientY-panY;
+  }else if(e.touches.length===2){
+    e.preventDefault();
+    isPinching=true;
+    dragged=true;
+
+    const t1=e.touches[0],t2=e.touches[1];
+    startPinchDist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
+    initialScale=currentScale;
+
+    const rect=viewport.getBoundingClientRect();
+    pinchCenterX=((t1.clientX+t2.clientX)/2)-rect.left;
+    pinchCenterY=((t1.clientY+t2.clientY)/2)-rect.top;
   }
-});
+},{passive:false});
 
-viewport.addEventListener('pointermove',e=>{
-  if(!activePointers.has(e.pointerId))return;
-  const old=activePointers.get(e.pointerId);
-  activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+viewport.addEventListener('touchmove',e=>{
+  e.preventDefault();
 
-  if(Math.hypot(e.clientX-old.x,e.clientY-old.y)>1) dragged=true;
-
-  if(activePointers.size===2){
-    // Snabb och direkt pinch-zoom baserad på distansförhållande
-    const pts=[...activePointers.values()];
-    const currentDist=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
-    if(initialPinchDist>10 && currentDist>10){
-      const factor=initialPinchDist/currentDist;
-      const targetW=Math.max(180,Math.min(initial.w*1.5,initialViewW*factor));
-      const f=targetW/view.w;
-      view.x=pinchCenterPoint.x-(pinchCenterPoint.x-view.x)*f;
-      view.y=pinchCenterPoint.y-(pinchCenterPoint.y-view.y)*f;
-      view.w=targetW;
-      update();
-    }
-  } else if(activePointers.size===1 && dragged){
-    // Direkt och mjuk panorering (pan)
+  if(e.touches.length===1&&!isPinching){
+    dragged=true;
     const rect=svg.getBoundingClientRect();
-    const dx=(e.clientX-old.x)*(view.w/rect.width);
-    const dy=(e.clientY-old.y)*(view.h/rect.height);
-    view.x-=dx;
-    view.y-=dy;
-    update();
-  }
-});
+    const dx=(e.touches[0].clientX-startPanX)*(view.w/rect.width);
+    const dy=(e.touches[0].clientY-startPanY)*(view.h/rect.height);
 
-function endPointer(e){
-  activePointers.delete(e.pointerId);
-  try{viewport.releasePointerCapture(e.pointerId);}catch(_){}
-  if(activePointers.size===1){
-    // Återställ om en finger lyfts
-    const remaining=[...activePointers.values()][0];
-    activePointers.set([...activePointers.keys()][0],remaining);
+    view.x-=dx*0.18;
+    view.y-=dy*0.18;
+    startPanX=e.touches[0].clientX;
+    startPanY=e.touches[0].clientY;
+    update();
+  }else if(e.touches.length===2&&isPinching){
+    const t1=e.touches[0],t2=e.touches[1];
+    const currentDist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
+
+    if(startPinchDist>5){
+      const zoomFactor=currentDist/startPinchDist;
+      currentScale=Math.min(Math.max(initialScale*zoomFactor,0.6),4.0);
+      requestAnimationFrame(applyTransform);
+    }
+  }
+},{passive:false});
+
+function handleTouchEnd(e){
+  if(e.touches.length<2&&isPinching){
+    isPinching=false;
+    commitTransformToViewBox();
+  }
+  if(e.touches.length===0){
+    dragged=false;
+    isPinching=false;
   }
 }
-viewport.addEventListener('pointerup',endPointer);
-viewport.addEventListener('pointercancel',endPointer);
+
+viewport.addEventListener('touchend',handleTouchEnd,{passive:true});
+viewport.addEventListener('touchcancel',handleTouchEnd,{passive:true});
 
 function mode(aerial){
   viewport.classList.toggle('aerial',aerial);
@@ -340,7 +385,6 @@ function setMotion(){
 }
 motion.onclick=()=>{playing=!playing;setMotion();};
 
-// Bakgrundsanimering av fiskar
 let lastFishFrame=0;
 function animateFish(now){
   if(now-lastFishFrame>=33){
