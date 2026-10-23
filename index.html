@@ -45,17 +45,41 @@
     <div class="compass" aria-hidden="true">↑<small>PLAN UP</small></div>
     <svg id="farm" viewBox="0 0 1500 660" xmlns="http://www.w3.org/2000/svg" aria-label="32 numbered blue water tanks">
       <defs>
-        <linearGradient id="water" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#56c2e7"/><stop offset=".44" stop-color="#228bbd"/><stop offset="1" stop-color="#0e557b"/></linearGradient>
-        <linearGradient id="dry" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b9b3a0"/><stop offset=".45" stop-color="#d3ccba"/><stop offset="1" stop-color="#a39d8c"/></linearGradient>
-        <pattern id="dry-floor" width="27" height="23" patternUnits="userSpaceOnUse"><circle cx="6" cy="9" r="1.3" fill="#6d665b" opacity=".24"/><circle cx="20" cy="18" r=".8" fill="#fff" opacity=".4"/><path d="M2 19l8-2M16 4l5 2" stroke="#746e62" stroke-width=".5" opacity=".25"/></pattern>
-        <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#e2b967"/><stop offset=".5" stop-color="#d59b44"/><stop offset="1" stop-color="#9c6a32"/></linearGradient>
-        <linearGradient id="ground" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#c4cdc3"/><stop offset="1" stop-color="#89998d"/></linearGradient>
-        <pattern id="paving" width="38" height="38" patternUnits="userSpaceOnUse"><rect width="38" height="38" fill="#bcc2b6"/><path d="M38 0H0V38" fill="none" stroke="#899285" stroke-width=".6"/></pattern>
-        <pattern id="ripples" width="65" height="32" patternUnits="userSpaceOnUse"><path d="M-10 10Q5 3 20 10T50 10T80 10M10 25Q25 18 40 25T70 25" fill="none" stroke="#d4f9ff" stroke-width="1" opacity=".2"/></pattern>
-        <pattern id="speckle" width="21" height="17" patternUnits="userSpaceOnUse"><circle cx="3" cy="6" r=".9" fill="#604d31" opacity=".17"/><circle cx="14" cy="12" r=".7" fill="#fff" opacity=".2"/></pattern>
-        <filter id="shadow" x="-30%" y="-30%" width="170%" height="170%"><feDropShadow dx="5" dy="9" stdDeviation="5" flood-color="#203426" flood-opacity=".36"/></filter>
-        <filter id="leafShadow"><feDropShadow dx="2" dy="4" stdDeviation="3" flood-opacity=".2"/></filter>
-        <g id="fishShape"><path d="M-9 0L-16-6L-14 6Z" fill="#183c45"/><ellipse rx="11" ry="6" fill="#183c45"/><path d="M-7-4Q0-12 7-4M-7 4Q0 12 7 4" fill="#285568"/><circle cx="7" cy="-2" r="1" fill="#a3ced1"/><g fill="#82a7aa" opacity=".7"><circle cx="-2" cy="-2" r=".7"/><circle cx="2" cy="2" r=".7"/><circle cx="-5" cy="2" r=".7"/></g></g>
+        <!-- Simplified lightweight gradients -->
+        <linearGradient id="water" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#3da5d9"/>
+          <stop offset="1" stop-color="#135d8a"/>
+        </linearGradient>
+        <linearGradient id="dry" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#c6c0ae"/>
+          <stop offset="1" stop-color="#a8a291"/>
+        </linearGradient>
+        <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#dfb260"/>
+          <stop offset="1" stop-color="#a67238"/>
+        </linearGradient>
+        <linearGradient id="ground" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#c0c9bf"/>
+          <stop offset="1" stop-color="#93a296"/>
+        </linearGradient>
+
+        <!-- Empty/Flat patterns to prevent heavy GPU texture rendering while keeping JS references intact -->
+        <pattern id="dry-floor" width="10" height="10" patternUnits="userSpaceOnUse"></pattern>
+        <pattern id="paving" width="10" height="10" patternUnits="userSpaceOnUse">
+          <rect width="10" height="10" fill="#b8beb2"/>
+        </pattern>
+        <pattern id="ripples" width="10" height="10" patternUnits="userSpaceOnUse"></pattern>
+        <pattern id="speckle" width="10" height="10" patternUnits="userSpaceOnUse"></pattern>
+
+        <!-- Disabled heavy drop-shadow filters (Main cause of SVG pan/zoom lag) -->
+        <filter id="shadow"></filter>
+        <filter id="leafShadow"></filter>
+
+        <!-- Ultra-lightweight fish shape (2 nodes instead of 8) -->
+        <g id="fishShape">
+          <polygon points="-8,0 -15,-5 -15,5" fill="#183c45"/>
+          <ellipse rx="10" ry="5" fill="#183c45"/>
+        </g>
       </defs>
       <g id="scene"></g>
     </svg>
@@ -67,7 +91,7 @@
       <button id="fit" aria-label="Fit entire farm">⌖</button>
     </div>
     <div class="map-hint">Drag to explore <b>·</b> Pinch to zoom</div>
-    <button class="motion" id="motion" aria-pressed="true" aria-label="Pause water animation">Ⅱ</button>
+    <button class="motion" id="motion" aria-pressed="false" aria-label="Pause water animation" hidden>Ⅱ</button>
   </div>
   <div class="map-footer">
     <span><i></i> <span id="fish-scale">Set fish quantities to populate the tanks</span></span>
@@ -136,7 +160,7 @@
     <p class="date-note">Date updates automatically in Korea time (KST).</p>
   </section>
   <section class="panel fish-panel">
-    <img src="assets/fish.jpg" alt="The supplied starry flounder fish reference">
+    <img src="assets/fish.jpg" alt="The supplied starry flounder fish reference" loading="lazy" decoding="async">
     <div>
       <span class="eyebrow">FISH REFERENCE</span>
       <h2>Starry flounder</h2>
@@ -152,7 +176,7 @@
 </footer>
 <dialog id="reference-dialog">
   <button id="reference-close" aria-label="Close photograph">✕</button>
-  <img src="assets/tank-reference.jpg" alt="Your fish farm photograph showing yellow tank walls and water">
+  <img src="assets/tank-reference.jpg" alt="Your fish farm photograph showing yellow tank walls and water" loading="lazy" decoding="async">
   <p>Tank structure reference</p>
 </dialog>
 </body>
